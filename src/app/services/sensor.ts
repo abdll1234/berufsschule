@@ -1,6 +1,7 @@
 import { Injectable, NgZone, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, map } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export type ConnectionState = 'connecting' | 'online' | 'offline';
 
@@ -18,6 +19,8 @@ export interface SensorReading {
 export class SensorService {
   private readonly http = inject(HttpClient);
   private readonly ngZone = inject(NgZone);
+  private readonly apiBaseUrl = this.normalizeBaseUrl(environment.apiBaseUrl);
+  private readonly wsBaseUrl = this.normalizeBaseUrl(environment.wsBaseUrl);
 
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -38,7 +41,7 @@ export class SensorService {
   fetchHistory(limit: number | 'all' = 10): Observable<SensorReading[]> {
     const query = limit === 'all' ? 'limit=all' : `limit=${Math.max(1, Math.floor(limit))}`;
 
-    return this.http.get<Partial<SensorReading>[]>(`/api/history?${query}`).pipe(
+    return this.http.get<Partial<SensorReading>[]>(this.buildApiUrl(`/api/history?${query}`)).pipe(
       map((rows) => rows.map((row) => this.normalizeReading(row))),
     );
   }
@@ -46,8 +49,7 @@ export class SensorService {
   private connectWebSocket(): void {
     this.connectionSubject.next('connecting');
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+    const wsUrl = this.buildWsUrl();
 
     this.socket = new WebSocket(wsUrl);
 
@@ -123,5 +125,31 @@ export class SensorService {
   private toNumberOrNull(value: unknown): number | null {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  private normalizeBaseUrl(value: string): string {
+    return value.trim().replace(/\/+$/, '');
+  }
+
+  private buildApiUrl(path: string): string {
+    if (!this.apiBaseUrl) {
+      return path;
+    }
+
+    return `${this.apiBaseUrl}${path}`;
+  }
+
+  private buildWsUrl(): string {
+    if (this.wsBaseUrl) {
+      return `${this.wsBaseUrl}/ws`;
+    }
+
+    if (this.apiBaseUrl) {
+      const wsFromApi = this.apiBaseUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+      return `${wsFromApi}/ws`;
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${wsProtocol}://${window.location.host}/ws`;
   }
 }
