@@ -1,5 +1,5 @@
 import { Injectable, NgZone, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { BehaviorSubject, Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 
@@ -21,9 +21,11 @@ export class SensorService {
   private readonly ngZone = inject(NgZone);
   private readonly apiBaseUrl = this.normalizeBaseUrl(environment.apiBaseUrl);
   private readonly wsBaseUrl = this.normalizeBaseUrl(environment.wsBaseUrl);
+  private readonly enableWebSocket = environment.enableWebSocket;
 
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly currentSubject = new BehaviorSubject<SensorReading | null>(null);
   private readonly historySubject = new BehaviorSubject<SensorReading[]>([]);
@@ -35,15 +37,24 @@ export class SensorService {
 
   constructor() {
     this.loadHistory();
-    this.connectWebSocket();
+
+    if (this.enableWebSocket) {
+      this.connectWebSocket();
+    } else {
+      this.connectionSubject.next('online');
+      this.startApiPolling();
+    }
   }
 
   fetchHistory(limit: number | 'all' = 10): Observable<SensorReading[]> {
     const query = limit === 'all' ? 'limit=all' : `limit=${Math.max(1, Math.floor(limit))}`;
+    const headers = this.shouldSendNgrokBypassHeader()
+      ? new HttpHeaders({ 'ngrok-skip-browser-warning': 'true' })
+      : undefined;
 
-    return this.http.get<Partial<SensorReading>[]>(this.buildApiUrl(`/api/history?${query}`)).pipe(
-      map((rows) => rows.map((row) => this.normalizeReading(row))),
-    );
+    return this.http
+      .get<Partial<SensorReading>[]>(this.buildApiUrl(`/api/history?${query}`), headers ? { headers } : {})
+      .pipe(map((rows) => rows.map((row) => this.normalizeReading(row))));
   }
 
   private connectWebSocket(): void {
@@ -108,6 +119,10 @@ export class SensorService {
       },
       error: (error) => {
         console.error('Could not load history:', error);
+
+        if (!this.enableWebSocket) {
+          this.connectionSubject.next('offline');
+        }
       },
     });
   }
@@ -151,5 +166,43 @@ export class SensorService {
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     return `${wsProtocol}://${window.location.host}/ws`;
+  }
+
+  private shouldSendNgrokBypassHeader(): boolean {
+    if (!this.apiBaseUrl) {
+      return false;
+    }
+
+    try {
+      const hostname = new URL(this.apiBaseUrl).hostname;
+      return hostname.includes('ngrok-free.app') || hostname.includes('ngrok-free.dev');
+    } catch {
+      return this.apiBaseUrl.includes('ngrok-free.');
+    }
+  }
+
+  private startApiPolling(): void {
+    if (this.pollTimer !== null) {
+      return;
+    }
+
+    this.pollTimer = setInterval(() => {
+      this.fetchHistory(10).subscribe({
+        next: (rows) => {
+          const history = rows.slice(0, 10);
+          this.historySubject.next(history);
+
+          if (history.length > 0) {
+            this.currentSubject.next(history[0]);
+          }
+
+          this.connectionSubject.next('online');
+        },
+        error: (error) => {
+          console.error('Polling failed:', error);
+          this.connectionSubject.next('offline');
+        },
+      });
+    }, 5000);
   }
 }

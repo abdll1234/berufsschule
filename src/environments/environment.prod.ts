@@ -1,7 +1,8 @@
 export const environment = {
   production: true,
-  // Set this to your deployed Node backend URL, e.g. https://your-api.onrender.com
-  apiBaseUrl: 'https://YOUR_BACKEND_DOMAIN',
-  // Optional: leave empty to derive from apiBaseUrl automatically.
+  // ngrok API endpoint for the live backend running on your local machine.
+  apiBaseUrl: 'https://nondeficiently-indeterministic-mignon.ngrok-free.dev',
   wsBaseUrl: '',
+  // API-only mode in production to avoid WebSocket issues through ngrok free interstitial.
+  enableWebSocket: false,
 };
