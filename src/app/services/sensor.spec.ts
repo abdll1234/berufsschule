@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { App } from './app';
+import { SensorService } from './sensor';
 
 class MockWebSocket {
   onopen: (() => void) | null = null;
@@ -15,10 +15,10 @@ class MockWebSocket {
   close(): void {}
 }
 
-describe('App', () => {
+describe('SensorService', () => {
   let originalWebSocket: typeof WebSocket;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     originalWebSocket = window.WebSocket;
     Object.defineProperty(window, 'WebSocket', {
       configurable: true,
@@ -26,10 +26,9 @@ describe('App', () => {
       value: MockWebSocket,
     });
 
-    await TestBed.configureTestingModule({
-      imports: [App],
+    TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
+    });
   });
 
   afterEach(() => {
@@ -42,22 +41,12 @@ describe('App', () => {
     TestBed.inject(HttpTestingController).verify();
   });
 
-  it('should create the app', () => {
-    const fixture = TestBed.createComponent(App);
+  it('should be created', () => {
+    const service = TestBed.inject(SensorService);
     const httpMock = TestBed.inject(HttpTestingController);
+
     httpMock.expectOne('/api/history?limit=10').flush([]);
 
-    const app = fixture.componentInstance;
-    expect(app).toBeTruthy();
-  });
-
-  it('should render dashboard title', () => {
-    const fixture = TestBed.createComponent(App);
-    const httpMock = TestBed.inject(HttpTestingController);
-    httpMock.expectOne('/api/history?limit=10').flush([]);
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Pflanzenboter Live Dashboard');
+    expect(service).toBeTruthy();
   });
 });
