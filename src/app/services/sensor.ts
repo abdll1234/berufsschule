@@ -31,6 +31,9 @@ export class SensorService {
   private readonly historySubject = new BehaviorSubject<SensorReading[]>([]);
   private readonly connectionSubject = new BehaviorSubject<ConnectionState>('connecting');
 
+  private lastServoState: number | null = null;
+  private audioContext: AudioContext | null = null;
+
   readonly current$ = this.currentSubject.asObservable();
   readonly history$ = this.historySubject.asObservable();
   readonly connection$ = this.connectionSubject.asObservable();
@@ -76,6 +79,8 @@ export class SensorService {
           const parsed = JSON.parse(event.data) as Partial<SensorReading>;
           const reading = this.normalizeReading(parsed);
 
+          this.checkServoAlarm(reading.servo);
+
           this.currentSubject.next(reading);
           this.historySubject.next([reading, ...this.historySubject.value].slice(0, 10));
         } catch (error) {
@@ -114,6 +119,7 @@ export class SensorService {
         this.historySubject.next(history);
 
         if (history.length > 0) {
+          this.checkServoAlarm(history[0].servo);
           this.currentSubject.next(history[0]);
         }
       },
@@ -193,6 +199,7 @@ export class SensorService {
           this.historySubject.next(history);
 
           if (history.length > 0) {
+            this.checkServoAlarm(history[0].servo);
             this.currentSubject.next(history[0]);
           }
 
@@ -204,5 +211,57 @@ export class SensorService {
         },
       });
     }, 5000);
+  }
+
+  private checkServoAlarm(currentServo: number | null): void {
+    if (currentServo === null) {
+      return;
+    }
+
+    // Alarm wenn Servo von geschlossen (<= 0) auf offen (> 0) wechselt
+    const wasClosed = this.lastServoState === null || this.lastServoState <= 0;
+    const isNowOpen = currentServo > 0;
+
+    if (wasClosed && isNowOpen) {
+      this.playAlarm();
+    }
+
+    this.lastServoState = currentServo;
+  }
+
+  private playAlarm(): void {
+    try {
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume();
+      }
+
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime); // A5 Note
+
+      // Pulsierender Effekt für 3 Sekunden
+      for (let i = 0; i < 3; i++) {
+        oscillator.frequency.exponentialRampToValueAtTime(880, this.audioContext.currentTime + i);
+        oscillator.frequency.exponentialRampToValueAtTime(440, this.audioContext.currentTime + i + 0.5);
+        oscillator.frequency.exponentialRampToValueAtTime(880, this.audioContext.currentTime + i + 1);
+      }
+
+      gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 3);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + 3);
+    } catch (e) {
+      console.error('Konnte Alarmton nicht abspielen:', e);
+    }
   }
 }
