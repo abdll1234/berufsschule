@@ -137,9 +137,24 @@ export class App {
     initialValue: 'connecting' as ConnectionState,
   });
 
+  // Manuelle Servo-Steuerung
+  readonly manualServoValue = signal<number | null>(null);
+  readonly isManualMode = signal(false);
+
   readonly co2Class = computed(() => this.classifyCo2(this.current()?.co2 ?? null));
   readonly waterClass = computed(() => this.classifyWater(this.current()?.wasser ?? null));
   readonly lightClass = computed(() => this.classifyLight(this.current()?.licht ?? null));
+
+  readonly servoStatus = computed(() => {
+    const co2 = this.current()?.co2;
+    const isAutoOpen = co2 !== null && co2 !== undefined && co2 >= 1200;
+
+    if (isAutoOpen) {
+      return 'Auto (CO2)';
+    }
+
+    return this.isManualMode() ? 'Manuell' : 'Auto';
+  });
 
   readonly servoMessage = computed(() => {
     const servo = this.current()?.servo;
@@ -190,6 +205,29 @@ export class App {
 
     return 'Verbinde...';
   });
+
+  onServoChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const angle = parseInt(target.value, 10);
+
+    this.manualServoValue.set(angle);
+    this.isManualMode.set(true);
+    this.sensorService.setServoAngle(angle);
+
+    // Automatisches Zuruecksetzen des "Manuell"-Status nach Inaktivitaet (optional, hier nicht gefordert)
+    // Fuer dieses Projekt lassen wir es auf "Manuell", bis CO2 wieder uebernimmt.
+  }
+
+  setServoAngle(angle: number): void {
+    this.manualServoValue.set(angle);
+    this.isManualMode.set(true);
+    this.sensorService.setServoAngle(angle);
+  }
+
+  resetManualMode(): void {
+    this.isManualMode.set(false);
+    this.manualServoValue.set(null);
+  }
 
   testAlarm(): void {
     this.sensorService.playAlarm();

@@ -39,6 +39,26 @@ export class SensorService {
   readonly history$ = this.historySubject.asObservable();
   readonly connection$ = this.connectionSubject.asObservable();
 
+  /**
+   * Sendet einen neuen Servo-Winkel über den WebSocket an das Backend.
+   * @param angle Winkel zwischen 0 und 180 Grad.
+   */
+  setServoAngle(angle: number): void {
+    const validatedAngle = Math.max(0, Math.min(180, Math.round(angle)));
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      try {
+        const payload = JSON.stringify({ servo: validatedAngle });
+        this.socket.send(payload);
+        console.log(`Servo-Befehl gesendet: ${payload}`);
+      } catch (error) {
+        console.error('Fehler beim Senden des Servo-Befehls:', error);
+      }
+    } else {
+      console.warn('WebSocket nicht verbunden. Servo-Befehl konnte nicht gesendet werden.');
+    }
+  }
+
   constructor() {
     this.loadHistory();
 
