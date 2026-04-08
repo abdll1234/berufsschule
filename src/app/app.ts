@@ -191,6 +191,10 @@ export class App {
     return 'Verbinde...';
   });
 
+  testAlarm(): void {
+    this.sensorService.playAlarm();
+  }
+
   formatTime(value: string): string {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString('de-DE');

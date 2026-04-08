@@ -12,6 +12,9 @@
       <div class="connection" [ngClass]="connection()">
         <span class="dot"></span>
         <span>WebSocket: {{ connectionLabel() }}</span>
+        <button class="test-alarm-btn" type="button" (click)="testAlarm()" title="Alarm testen & Audio aktivieren">
+          🔔
+        </button>
       </div>
     </header>
 

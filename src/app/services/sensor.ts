@@ -33,6 +33,7 @@ export class SensorService {
 
   private lastServoState: number | null = null;
   private audioContext: AudioContext | null = null;
+  private isFirstLoad = true;
 
   readonly current$ = this.currentSubject.asObservable();
   readonly history$ = this.historySubject.asObservable();
@@ -222,14 +223,15 @@ export class SensorService {
     const wasClosed = this.lastServoState === null || this.lastServoState <= 0;
     const isNowOpen = currentServo > 0;
 
-    if (wasClosed && isNowOpen) {
+    if (wasClosed && isNowOpen && !this.isFirstLoad) {
       this.playAlarm();
     }
 
     this.lastServoState = currentServo;
+    this.isFirstLoad = false;
   }
 
-  private playAlarm(): void {
+  playAlarm(): void {
     try {
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
