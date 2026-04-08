@@ -136,7 +136,7 @@ export class SensorService {
 
   private normalizeReading(row: Partial<SensorReading>): SensorReading {
     return {
-      zeit: typeof row.zeit === 'string' ? row.zeit : new Date().toISOString(),
+      zeit: this.normalizeTimestamp(row.zeit),
       co2: this.toNumberOrNull(row.co2),
       licht: this.toNumberOrNull(row.licht),
       wasser: this.toNumberOrNull(row.wasser),
@@ -147,6 +147,20 @@ export class SensorService {
   private toNumberOrNull(value: unknown): number | null {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  private normalizeTimestamp(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return new Date().toISOString();
+    }
+
+    let normalized = value.trim().replace(' ', 'T');
+    if (!/(Z|[+-]\d{2}:\d{2})$/i.test(normalized)) {
+      normalized = `${normalized}Z`;
+    }
+
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
   }
 
   private normalizeBaseUrl(value: string): string {
